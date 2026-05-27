@@ -142,6 +142,76 @@ npm run build                          # bundle production
 npm run lint                           # ESLint
 ```
 
+## Déploiement
+
+### Vue d'ensemble
+
+| Composant | Plateforme | Fichier de configuration         |
+|-----------|------------|----------------------------------|
+| Frontend  | Vercel     | [frontend/vercel.json](frontend/vercel.json) |
+| Backend   | Render (Docker) | [backend/Dockerfile](backend/Dockerfile) |
+| Base de données | Render Postgres | [render.yaml](render.yaml) (Blueprint) |
+
+> Render ne propose pas de MySQL géré, l'API tourne donc sur **PostgreSQL** en production. Laravel gère le changement de driver de manière transparente via les variables d'environnement — aucun changement de code requis.
+
+### 1. Backend + base de données → Render
+
+**Pré-requis** : pousser ce dépôt sur GitHub (ou GitLab/Bitbucket).
+
+1. Dans Render : **New + → Blueprint → Connect repository**. Render lit automatiquement [render.yaml](render.yaml) et propose de créer :
+   - `edupresence-db` (PostgreSQL, plan gratuit)
+   - `edupresence-api` (service web Docker, plan gratuit)
+   Toutes les variables `DB_*` sont câblées automatiquement depuis l'instance Postgres.
+
+2. **Générer la clé Laravel localement** (à faire une seule fois) :
+   ```bash
+   cd backend
+   php artisan key:generate --show
+   ```
+   Copier la valeur complète (avec le préfixe `base64:`) et la coller dans l'éditeur d'env vars Render → variable `APP_KEY`.
+
+3. Cliquer sur **Apply** pour lancer le build. Render :
+   - construit l'image Docker (~3-4 min)
+   - lance `php artisan migrate --force` au démarrage
+   - démarre le serveur sur `https://edupresence-api.onrender.com` (URL exacte affichée par Render)
+
+4. Une fois l'URL connue, dans l'onglet **Environment** de `edupresence-api` :
+   - définir `APP_URL` à l'URL Render (ex: `https://edupresence-api.onrender.com`)
+   - redéployer le service
+
+5. (Optionnel) **Charger les données de démo** une fois pour le compte de démonstration :
+   - Render → service → **Shell**
+   - `php artisan db:seed --force`
+   - Identifiants démo : `teacher@edupresence.test` / `password`
+
+> ⚠️ **Plan gratuit Render** : le service s'endort après 15 min d'inactivité (cold start ~30 s à la première requête). La base Postgres gratuite expire au bout de 30 jours.
+
+### 2. Frontend → Vercel
+
+1. Dans Vercel : **Add New → Project** → importer le dépôt.
+2. **Root Directory** : `frontend` (Vercel détecte automatiquement Vite).
+3. **Environment Variables** :
+   - `VITE_API_URL` = `https://edupresence-api.onrender.com/api` (l'URL de votre backend Render + `/api`)
+4. **Deploy**.
+
+Vercel lit [frontend/vercel.json](frontend/vercel.json) qui contient la règle de rewrite SPA — toutes les routes (`/classes`, `/presences`, etc.) renvoient vers `index.html` pour que React Router fonctionne sur rechargement direct.
+
+### 3. CORS
+
+Le backend autorise déjà `*` comme origine ([backend/config/cors.php](backend/config/cors.php)) — l'authentification par token Bearer ne nécessite pas de credentials. Aucun changement nécessaire.
+
+Pour restreindre en production, éditer `config/cors.php` :
+```php
+'allowed_origins' => [env('FRONTEND_URL', '*')],
+```
+puis ajouter `FRONTEND_URL=https://votre-app.vercel.app` dans les env vars Render.
+
+### 4. Mise à jour continue
+
+- **Push sur la branche `main`** → Render et Vercel rebuilds automatiques.
+- Les migrations sont rejouées à chaque démarrage (`php artisan migrate --force` est idempotent).
+- Les `config:cache` et `route:cache` sont rafraîchis à chaque build.
+
 ## Roadmap
 
 Améliorations futures listées dans le cahier des charges, non livrées dans ce MVP :

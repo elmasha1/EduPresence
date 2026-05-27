@@ -1,0 +1,78 @@
+# Render blueprint — provisions a Postgres database + the Laravel API in one shot.
+# Deploy with: New + → Blueprint → connect this repo → Render reads this file.
+
+databases:
+  - name: edupresence-db
+    plan: free
+    databaseName: edupresence
+    user: edupresence
+
+services:
+  - type: web
+    name: edupresence-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /up
+    envVars:
+      - key: APP_NAME
+        value: EduPresence
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_LOCALE
+        value: fr
+      - key: APP_FALLBACK_LOCALE
+        value: en
+
+      # IMPORTANT: set this manually in the Render dashboard before the first deploy.
+      # Generate locally: `php artisan key:generate --show` and paste the full value
+      # (including the "base64:" prefix) into the Render env var editor.
+      - key: APP_KEY
+        sync: false
+
+      # Set this to your Render-assigned URL after the first deploy
+      # (e.g. https://edupresence-api.onrender.com)
+      - key: APP_URL
+        sync: false
+
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+
+      # Database — wired from the Postgres instance above
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: edupresence-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: edupresence-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: edupresence-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: edupresence-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: edupresence-db
+          property: password
+
+      # Token-based Sanctum — no cookies needed
+      - key: SESSION_DRIVER
+        value: cookie
+      - key: CACHE_STORE
+        value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: BCRYPT_ROUNDS
+        value: "12"
