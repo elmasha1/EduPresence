@@ -1,0 +1,31 @@
+.git
+.gitignore
+.gitattributes
+.editorconfig
+.vscode
+.idea
+README.md
+render.yaml
+vercel.json
+
+# Frontend isn't part of the backend image
+frontend
+
+# Local secrets / artifacts inside backend
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/node_modules
+backend/vendor
+backend/storage/logs/*
+!backend/storage/logs/.gitignore
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+!backend/storage/framework/sessions/.gitignore
+backend/storage/framework/views/*
+!backend/storage/framework/views/.gitignore
+backend/database/database.sqlite
+backend/database/*.sqlite
+backend/tests
+backend/.phpunit.cache
+backend/.phpunit.result.cache

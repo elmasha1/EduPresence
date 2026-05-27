@@ -12,8 +12,8 @@ services:
     name: edupresence-api
     runtime: docker
     plan: free
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /up
     envVars:
       - key: APP_NAME

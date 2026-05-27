@@ -1,6 +1,6 @@
 # EduPresence backend — production image for Render.
-# Uses PHP CLI + built-in server. Sufficient for a small SaaS demo on Render's
-# free tier; for higher traffic, swap to php-fpm + nginx via supervisord.
+# Lives at the repo root so it works regardless of whether Render's "Root
+# Directory" service setting is empty (default) or "backend".
 
 FROM php:8.2-cli
 
@@ -21,7 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         zip \
     && rm -rf /var/lib/apt/lists/*
 
-# Composer from the official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 ENV COMPOSER_MEMORY_LIMIT=-1 \
@@ -30,28 +29,21 @@ ENV COMPOSER_MEMORY_LIMIT=-1 \
 
 WORKDIR /app
 
-# Step 1 — diagnose runtime so failures are easy to read in build logs.
-RUN php --version \
-    && composer --version \
-    && composer diagnose || true
+# Copy only the backend's composer files first for better layer caching.
+COPY backend/composer.json backend/composer.lock ./
 
-# Step 2 — install deps with composer.json + lock only first (better cache).
-COPY composer.json composer.lock ./
 RUN composer install \
         --no-dev \
         --no-scripts \
         --no-autoloader \
-        --prefer-dist \
-        --verbose
+        --prefer-dist
 
-# Step 3 — copy the rest of the application code.
-COPY . .
+# Copy the rest of the backend source on top.
+COPY backend/ ./
 
-# Step 4 — generate the production autoloader now that all app files exist.
-RUN composer dump-autoload --optimize --no-scripts --no-dev
-
-# Step 5 — ensure Laravel writable directories exist with the right perms.
-RUN mkdir -p \
+# Generate optimized autoloader now that all app files are present.
+RUN composer dump-autoload --optimize --no-scripts --no-dev \
+    && mkdir -p \
         storage/app/public \
         storage/framework/cache/data \
         storage/framework/sessions \
@@ -60,12 +52,12 @@ RUN mkdir -p \
         bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# Render injects PORT. Default to 8000 for local docker run.
+# Render injects PORT. Default 8000 for local docker run.
 ENV PORT=8000
 EXPOSE 8000
 
 # On boot: discover packages, run pending migrations (idempotent), warm caches,
-# then serve. Seeding (php artisan db:seed) is a one-shot — run from the
+# then serve. Seeding (`php artisan db:seed`) is a one-shot — run from the
 # Render shell on first deploy if you want demo data.
 CMD sh -c "php artisan package:discover --ansi \
  && php artisan migrate --force \
